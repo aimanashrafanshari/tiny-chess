@@ -14,7 +14,7 @@ def PS(fen):
    if c.isdigit():f+=int(c)
    else:b[(7-i)*16+f]=c;f+=1
  return b,stm=='w',cs,ep
-def US(sq):return F[sq&7]+str(sq>>4+1)
+def US(sq):return F[sq&7]+str((sq>>4)+1)
 def UCI(m):f,t,pr,fl=m;return US(f)+US(t)+pr
 def atk(b,sq,w):
  d=16 if w else-16
