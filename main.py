@@ -38,9 +38,13 @@ def ks(b,w):
  return-1
 def chk(b,w):k=ks(b,w);return k>=0 and atk(b,k,not w)
 def PV(p,sq,w):
- v=V[p.upper()];cd=(7-(sq>>4))if w else(sq>>4)
- if p in'Pp':v+=16*cd-12 if cd<6 else 700
- elif p in'Kk':v-=40 if cd<3 else 0
+ v=V[p.upper()];r,f=sq>>4,sq&7;cd=(7-r)if w else r
+ if p in'Pp':v+=18*cd-8 if cd<6 else 900
+ elif p in'Nn':v+=8*(3-abs(f-4))+8*(3-abs(r-4))
+ elif p in'Bb':v+=8*(3-abs(f-4))+8*(3-abs(r-4))
+ elif p in'Rr':v+=6*(3-abs(f-4))+6*cd
+ elif p in'Qq':v+=6*(3-abs(f-4))+6*(3-abs(r-4))
+ elif p in'Kk':v+=-50 if cd<3 else(30 if cd>5 else 0)
  return v if w else-v
 def ev(b):
  s=0
@@ -94,17 +98,16 @@ def gn(b,w,cs,ep,cp=0):
       break
      t+=st
  return o
-def MK(b,m,w,cs,ep):
+def MK(b,m,w,cs):
  f,t,pr,fl=m;p=b[f];nb=b[:]
- nb[t]=(pr.upper()if w else pr)if pr else p;nb[f]=None;e=None
+ nb[t]=(pr.upper()if w else pr)if pr else p;nb[f]=None
  if p in'Pp'and abs(t-f)==32:e=(f+t)//2
- if fl=='e':nb[t+(-16 if w else 16)]=None
     
   
   
   
- return nb,cs,e
-MT=90000;N=0;L=20000
+ return nb,cs
+MT=90000;N=0;L=9000
 def ab(b,w,cs,ep,d,a,bn):
  global N
  N+=1
@@ -114,10 +117,10 @@ def ab(b,w,cs,ep,d,a,bn):
  ms.sort(key=lambda m:-(V[b[m[1]].upper()]if b[m[1]]else 0))
  best=-MT*2;an=0
  for m in ms:
-  nb,nc,ne=MK(b,m,w,cs,ep)
+  nb,nc=MK(b,m,w,cs)
   if chk(nb,w):continue
   an=1
-  sc=-ab(nb,not w,nc,ne,d-1,-bn,-a)
+  sc=-ab(nb,not w,nc,0,d-1,-bn,-a)
   if sc>best:best=sc
   if sc>a:a=sc
   if a>=bn:break
@@ -130,13 +133,13 @@ def BM(fen,bud):
  ms.sort(key=lambda m:-(V[b[m[1]].upper()]if b[m[1]]else 0))
  best,bm=-MT*2,None
  for m in ms:
-  nb,nc,ne=MK(b,m,w,cs,ep)
+  nb,nc=MK(b,m,w,cs)
   if chk(nb,w):continue
-  sc=-ab(nb,not w,nc,ne,d-1,-MT*2,MT*2)
+  sc=-ab(nb,not w,nc,0,d-1,-MT*2,MT*2)
   if sc>best:best,bm=sc,m
  return UCI(bm)if bm else None
 def CH(fen,leg):
- mv=BM(fen,20000);return mv if mv in leg else leg[0]
+ mv=BM(fen,9000);return mv if mv in leg else leg[0]
 g=P("/game",{})
 while g["status"]!="done":
  while g["status"]=="your_move":
