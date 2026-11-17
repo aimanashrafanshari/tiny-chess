@@ -1,148 +1,109 @@
-#!/usr/bin/env python3
 import json,os,sys,urllib.request
-E=os.environ.get("MAKEFUN_ENV_URL")or sys.exit("no env")
-def P(p,b):
- r=urllib.request.Request(E+p,data=json.dumps(b).encode(),headers={"content-type":"application/json"})
- return json.load(urllib.request.urlopen(r,timeout=15))
-KN=(-33,-31,-18,-14,14,18,31,33);KB=(-17,-15,15,17);KR=(-16,-1,1,16);KQ=KB+KR
-V={'P':100,'N':320,'B':335,'R':500,'Q':900,'K':20000};F="abcdefgh"
-def PS(fen):
- b=[None]*128;p,stm,cs,ep=(fen.split()+['-'])[:4]
- for i,r in enumerate(p.split('/')):
-  f=0
-  for c in r:
-   if c.isdigit():f+=int(c)
-   else:b[(7-i)*16+f]=c;f+=1
- return b,stm=='w',cs,ep
-def US(sq):return F[sq&7]+str((sq>>4)+1)
-def UCI(m):f,t,pr,fl=m;return US(f)+US(t)+pr
-def atk(b,sq,w):
+U=os.environ.get('MAKEFUN_ENV_URL') or sys.exit('MAKEFUN_ENV_URL required')
+V={'p':100,'n':320,'b':330,'r':500,'q':900,'k':0};K=20000;LIMIT=8000;N=0
+N8=(14,31,33,18,-14,-31,-33,-18);K8=(1,16,-1,-16,15,17,-15,-17)
+def post(p,b):
+ r=urllib.request.Request(U+p,data=json.dumps(b).encode(),headers={'content-type':'application/json'});return json.load(urllib.request.urlopen(r))
+def parse(f):
+ b=[None]*128;s=f.split()
+ for r,row in enumerate(s[0].split('/')):
+  i=(7-r)*16
+  for c in row:
+   if c.isdigit():i+=int(c)
+   else:b[i]=c;i+=1
+  return b,s[1]=='b',s[2],s[3]
+def sq(x):return chr(97+(x&7))+str(8-(x>>4))
+def name(m):return sq(m[0])+sq(m[1])+m[2]
+def chk(b,w):return hit(b,b.index('K'if w else'k'),not w)
+def hit(b,x,w):
  d=16 if w else-16
- for df in(-1,1):
-  s=sq-d+df
-  if 0<=s<128 and not(s&0x88)and b[s]==('P'if w else'p'):return 1
- for ds,pc in((KN,'Nn'),(KQ,'QqKk')):
-  for st in ds:
-   s=sq+st
-   if s&0x88:continue
-   c=b[s]
-   if c:
-    if c in pc:return 1
-    break
-   if ds is not KN:s+=st
+ for z in (x-d-1,x-d+1):
+  if not z&0x88 and b[z]==('P'if w else'p'):return 1
+ for ds,pcs in ((N8,'Nn'),(K8,'Kk'),((1,16,-1,-16),'RrQq'),((15,17,-15,-17),'BbQq')):
+  for d in ds:
+   q=x+d
+   while not q&0x88:
+    if b[q]:
+     if b[q] in pcs:return 1
+     break
+    if ds in (N8,K8):break
+    q+=d
  return 0
-def ks(b,w):
- k='K'if w else'k'
- for s in range(128):
-  if not(s&0x88)and b[s]==k:return s
- return-1
-def chk(b,w):k=ks(b,w);return k>=0 and atk(b,k,not w)
-def PV(p,sq,w):
- v=V[p.upper()];r,f=sq>>4,sq&7;cd=(7-r)if w else r
- if p in'Pp':v+=18*cd-8 if cd<6 else 900
- elif p in'Nn':v+=8*(3-abs(f-4))+8*(3-abs(r-4))
- elif p in'Bb':v+=8*(3-abs(f-4))+8*(3-abs(r-4))
- elif p in'Rr':v+=6*(3-abs(f-4))+6*cd
- elif p in'Qq':v+=6*(3-abs(f-4))+6*(3-abs(r-4))
- elif p in'Kk':v+=-50 if cd<3 else(30 if cd>5 else 0)
- return v if w else-v
-def ev(b):
- s=0
- for sq in range(128):
-  if b[sq]and not(sq&0x88):s+=PV(b[sq],sq,b[sq].isupper())
- return s
-def gn(b,w,cs,ep,cp=0):
- o=[];ow=str.isupper if w else str.islower
- for s in range(128):
-  if s&0x88 or not b[s]or not ow(b[s]):continue
-  p=b[s];P=p.upper()
-  if P=='P':
-   d=16 if w else-16;o1=s+d;pr=7 if w else 0
-   for df in(-1,1):
-    t=o1+df
-    if t&0x88:continue
-    q=b[t]
-    if q and not ow(q):
-     for x in('q','r','b','n')if(t>>4)==pr else('',):o.append((s,t,x,''))
-   if not cp and not b[o1]:
-    if(o1>>4)==pr:
-     for x in'qrn':o.append((s,o1,x,''))
-    else:
-     o.append((s,o1,'',''))
-     st=1 if w else 6
-     if(s>>4)==st and not b[o1+d]:o.append((s,o1+d,'',''))
-  elif P=='N':
-   for st in KN:
-    t=s+st
-    if t&0x88:continue
-    q=b[t]
-    if not q or not ow(q):
-     if not cp or q:o.append((s,t,'',''))
-  elif P=='K':
-   for st in KQ:
-    t=s+st
-    if t&0x88:continue
-    q=b[t]
-    if not q or not ow(q):
-     if not cp or q:o.append((s,t,'',''))
-  else:
-   ds=KB if P=='B'else KR if P=='R'else KQ
-   for st in ds:
-    t=s+st
-    while not(t&0x88):
-     q=b[t]
-     if not q:
-      if not cp:o.append((s,t,'',''))
-     else:
-      if not ow(q):o.append((s,t,'',''))
-      break
-     t+=st
+def gen(b,w,cs,ep):
+ o=[];own=str.isupper if w else str.islower
+ for s,p in enumerate(b):
+  if s&0x88 or not p or not own(p):continue
+  t=p.lower()
+  if t=='p':
+   d=16 if w else-16;last=7 if w else 0
+   for z in (s+d-1,s+d+1):
+    if not z&0x88 and ((b[z] and not own(b[z])) or z==ep):o.append((s,z,'q'if z>>4==last else'',z==ep and not b[z]))
+   z=s+d
+   if not z&0x88 and not b[z]:
+    o.append((s,z,'q'if z>>4==last else'',False));zz=z+d
+    if s>>4==(1 if w else 6) and not b[zz]:o.append((s,zz,'',False))
+   continue
+  ds=N8 if t=='n' else K8 if t=='k' else (15,17,-15,-17)if t=='b' else (1,16,-1,-16)if t=='r' else K8
+  for d in ds:
+   z=s+d
+   while not z&0x88:
+    if b[z]:
+     if not own(b[z]):o.append((s,z,'',False))
+     break
+    o.append((s,z,'',False))
+    if t in'nk':break
+    z+=d
+  if t=='k':
+   for bit,mid,dest,rk in (('K'if w else'k',s+1,s+2,s+3),('Q'if w else'q',s-1,s-2,s-4)):
+    if bit in cs and b[rk]==('R'if w else'r') and not b[mid] and not b[dest] and not chk(b,w) and not hit(b,mid,not w) and not hit(b,dest,not w):o.append((s,dest,'',False))
  return o
-def MK(b,m,w,cs):
- f,t,pr,fl=m;p=b[f];nb=b[:]
- nb[t]=(pr.upper()if w else pr)if pr else p;nb[f]=None
- if p in'Pp'and abs(t-f)==32:e=(f+t)//2
-    
-  
-  
-  
- return nb,cs
-MT=90000;N=0;L=9000
-def ab(b,w,cs,ep,d,a,bn):
+def move(b,m,w,cs,ep):
+ s,z,pr,e=m;p=b[s];q=b[:];q[s]=None
+ if e:q[z+(16 if w else-16)]=None
+ q[z]=(pr.upper()if w else pr)if pr else p
+ if p.lower()=='k' and abs(z-s)==2:
+  r=s+(3 if z>s else-4);q[s+(1 if z>s else-1)]=q[r];q[r]=None
+ c=cs
+ if p.lower()=='k':c=c.replace('K','').replace('Q','').replace('k','').replace('q','')
+ for x in (s,z):
+  if x==0:c=c.replace('q','')
+  if x==7:c=c.replace('k','')
+  if x==112:c=c.replace('Q','')
+  if x==119:c=c.replace('K','')
+ e=(s+z)//2 if p.lower()=='p' and abs(z-s)==32 else -1
+ return q,c,e
+def pst(p,s):
+ t=p.lower();r=s>>4;f=s&7;adv=r if p.isupper() else 7-r;cen=6-abs(3-f)-abs(3-r)
+ return V[t]+(adv*12 if t=='p' else cen*8 if t=='n' else cen*5 if t=='b' else adv*4 if t=='r' else cen*2 if t=='q' else (-40 if adv<2 else 20 if adv>5 else 0))
+def ev(b):return sum(pst(p,s)*(1 if p.isupper() else-1)for s,p in enumerate(b)if p and not s&0x88)
+def order(b,m):
+ s,z,p,e=m;v=b[z]
+ return (-(10*V[v.lower()]-V[b[s].lower()]if v else 0),-V[p]if p else 0,s,z)
+def ab(b,w,c,e,d,a,bb):
  global N
  N+=1
- if N>L:return ev(b)if w else-ev(b)
- if d==0:return ev(b)if w else-ev(b)
- ms=gn(b,w,cs,ep)
- ms.sort(key=lambda m:-(V[b[m[1]].upper()]if b[m[1]]else 0))
- best=-MT*2;an=0
+ if N>=LIMIT or d==0:return ev(b)if w else-ev(b)
+ ms=gen(b,w,c,e);ms.sort(key=lambda m:order(b,m));best=-K;ok=0
  for m in ms:
-  nb,nc=MK(b,m,w,cs)
-  if chk(nb,w):continue
-  an=1
-  sc=-ab(nb,not w,nc,0,d-1,-bn,-a)
-  if sc>best:best=sc
-  if sc>a:a=sc
-  if a>=bn:break
- if not an:return-MT if chk(b,w)else 0
- return best
-def BM(fen,bud):
- global N,L
- b,w,cs,ep=PS(fen);L=bud;N=0;d=6
- ms=gn(b,w,cs,ep)
- ms.sort(key=lambda m:-(V[b[m[1]].upper()]if b[m[1]]else 0))
- best,bm=-MT*2,None
+  q,cc,ee=move(b,m,w,c,e)
+  if chk(q,w):continue
+  ok=1;x=-ab(q,not w,cc,ee,d-1,-bb,-a)
+  if x>best:best=x
+  if x>a:a=x
+  if a>=bb:break
+ return best if ok else(-K if chk(b,w)else 0)
+def choose(f,legal):
+ global N
+ b,w,c,e=parse(f);e=-1 if e=='-' else(8-int(e[1]))*16+ord(e[0])-97;N=0
+ ms=gen(b,w,c,e);ms.sort(key=lambda m:order(b,m));best=-K;ans=None
  for m in ms:
-  nb,nc=MK(b,m,w,cs)
-  if chk(nb,w):continue
-  sc=-ab(nb,not w,nc,0,d-1,-MT*2,MT*2)
-  if sc>best:best,bm=sc,m
- return UCI(bm)if bm else None
-def CH(fen,leg):
- mv=BM(fen,9000);return mv if mv in leg else leg[0]
-g=P("/game",{})
-while g["status"]!="done":
- while g["status"]=="your_move":
-  g=P("/move",{"game":g["game"],"move":CH(g["fen"],g["legal_moves"])})
- print(f"game {g['game']}: {g['outcome']} by {g['reason']}",file=sys.stderr)
-print(f"done: {g.get('wins')}W {g.get('draws')}D {g.get('losses')}L",file=sys.stderr)
+  q,cc,ee=move(b,m,w,c,e)
+  if chk(q,w):continue
+  x=-ab(q,not w,cc,ee,4,-K,K)
+  if x>best:best=x;ans=name(m)
+ return ans if ans in legal else legal[0]
+while 1:
+ g=post('/game',{})
+ if g['status']=='done':break
+ while g['status']=='your_move':g=post('/move',{'game':g['game'],'move':choose(g['fen'],g['legal_moves'])})
+ print(g['game'],g['outcome'],g['reason'],file=sys.stderr)
